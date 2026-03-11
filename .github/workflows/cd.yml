@@ -3,48 +3,16 @@ name: Continuous Deployment
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version or tag to deploy (e.g. v1.0.0 or main)'
+        required: true
+        type: string
 
-concurrency: ${{ github.workflow }}-${{ github.event.release.tag_name }}
+concurrency: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && format('manual-{0}', github.event.inputs.version) || github.event.release.tag_name }}
 
 jobs:
-  publish-npm:
-    runs-on: ubuntu-latest
-    environment: npm
-    permissions:
-      id-token: write # Required for npm Trusted Publishing (OIDC)
-      contents: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.release.tag_name }}
-          fetch-depth: 0
-
-      - name: Install mise
-        uses: jdx/mise-action@v3
-        with:
-          install: true
-          cache: true
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Cache Turbo
-        uses: actions/cache@v4
-        with:
-          path: |
-            node_modules/.cache/turbo
-            .turbo
-          key: ${{ runner.os }}-turbo-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-turbo-
-
-      - name: Build
-        run: pnpm run build
-
-      - name: Publish to npm
-        run: pnpm changeset publish --no-git-tag
-
   deploy-cloudflare:
     name: Deploy to Cloudflare Workers
     runs-on: ubuntu-latest
@@ -53,7 +21,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version || github.event.release.tag_name }}
           fetch-depth: 0
 
       - name: Install mise
