@@ -1,0 +1,66 @@
+name: Continuous Deployment
+
+on:
+  release:
+    types: [published]
+
+concurrency: ${{ github.workflow }}-${{ github.event.release.tag_name }}
+
+jobs:
+  publish-npm:
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
+
+      - name: Install mise
+        uses: jdx/mise-action@v3
+        with:
+          version: latest
+          install: true
+          cache: true
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Publish to npm
+        run: pnpm changeset publish --no-git-tag
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  deploy-cloudflare:
+    name: Deploy to Cloudflare Workers
+    runs-on: ubuntu-latest
+    environment: cloudflare
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
+
+      - name: Install mise
+        uses: jdx/mise-action@v3
+        with:
+          version: latest
+          install: true
+          cache: true
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Deploy Worker (Wrangler)
+        run: pnpm run deploy:worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

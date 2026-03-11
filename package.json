@@ -4,10 +4,17 @@
   "packageManager": "pnpm@10.31.0",
   "scripts": {
     "build": "pnpm -r run build",
+    "lint": "pnpm -r run lint",
     "dev:cli": "pnpm --filter meetfy run start",
     "dev:worker": "pnpm --filter meetfy-worker run dev",
     "deploy:worker": "pnpm --filter meetfy-worker run deploy",
-    "deploy:cli": "pnpm --filter meetfy run deploy"
+    "deploy:cli": "pnpm --filter meetfy run deploy",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "pnpm run build && changeset publish"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.0"
   },
   "keywords": [],
   "license": "ISC"

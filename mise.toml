@@ -1,3 +1,15 @@
 [tools]
 node = "latest"
 pnpm = "latest"
+
+[tasks.version]
+description = "Consume changesets and bump package versions (run before merging release)"
+run = "pnpm changeset version"
+
+[tasks.release]
+description = "Build, publish to npm, and deploy worker (use in CI or after version)"
+run = "pnpm run release"
+
+[tasks.changeset]
+description = "Add a new changeset"
+run = "pnpm changeset"

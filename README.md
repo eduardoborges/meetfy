@@ -1,51 +1,112 @@
-# Meetfy (monorepo)
+<div align="center">
+  <h1>Meetfy</h1>
+  <p>CLI for creating instant meetings and reserving time in Google Calendar. No credentials file on your machine — auth via hosted OAuth.</p>
 
-CLI for creating instant meetings and reserving time in Google Calendar. **No credentials file on your machine** — auth goes through the hosted Auth Worker.
+  [![npm](https://img.shields.io/npm/v/meetfy)](https://www.npmjs.com/package/meetfy)
+  [![npm downloads](https://img.shields.io/npm/dw/meetfy)](https://www.npmjs.com/package/meetfy)
+</div>
 
-## Structure
+---
 
-- **`packages/cli`** – Meetfy CLI (`meetfy`). Uses the Auth Worker at `https://meetfy.eduardoborges.dev` for Google sign-in.
-- **`packages/worker`** – Cloudflare Worker (Hono) that holds Google OAuth secrets and does the OAuth flow.
-
-## Quick start
-
-```sh
-cd packages/cli
-pnpm install
-pnpm start -- auth    # sign in with Google (opens browser)
-pnpm start -- create  # create a meeting
-pnpm start -- next    # show next meeting
-pnpm start -- logout  # sign out
-```
-
-Optional: set `MEETFY_AUTH_URL` to use a different Auth Worker (default: `https://meetfy.eduardoborges.dev`).
-
-## Deploying the Auth Worker (maintainers)
-
-1. Deploy the Worker (once):
-
-   ```sh
-   cd packages/worker
-   pnpm install
-   pnpm wrangler secret put GOOGLE_CLIENT_ID
-   pnpm wrangler secret put GOOGLE_CLIENT_SECRET
-   pnpm run deploy
-   ```
-
-2. In [Google Cloud Console](https://console.cloud.google.com/apis/credentials), set the OAuth 2.0 client **Authorized redirect URI** to:
-
-   `https://meetfy.eduardoborges.dev/callback`
-
-## Monorepo scripts (from repo root)
+## Install
 
 ```sh
-pnpm install          # install all workspaces
-pnpm build            # build all packages
-pnpm dev:cli          # run CLI (packages/cli)
-pnpm dev:worker       # run Worker locally (packages/worker)
-pnpm deploy:worker    # deploy Worker to Cloudflare
+npm install -g meetfy
 ```
+
+Or with pnpm:
+
+```sh
+pnpm add -g meetfy
+```
+
+## Usage
+
+### First time: authenticate
+
+Sign in with Google (opens the browser and uses the hosted Auth Worker — no local credentials):
+
+```sh
+meetfy auth
+```
+
+### Create a meeting
+
+Creates an instant meeting and reserves **30 minutes** in your calendar. Asks for title, description, and participants if not passed.
+
+```sh
+meetfy create
+```
+
+With options (no prompts):
+
+```sh
+meetfy create --title "Sync with team" --description "Weekly sync"
+meetfy create -t "1:1" -d "Catch up" -p "alice@example.com,bob@example.com"
+```
+
+### See your next meeting
+
+```sh
+meetfy next
+```
+
+### Log out
+
+```sh
+meetfy logout
+```
+
+## JSON output
+
+Use `--json` for scriptable output (auth, create, next).
+
+```sh
+meetfy --json auth
+meetfy --json create --title "Standup"
+meetfy --json next
+```
+
+Example (create success):
+
+```json
+{"success":true,"meeting":{"title":"Standup","hangoutLink":"https://meet.google.com/...","startTime":"...","endTime":"..."}}
+```
+
+Example (not authenticated):
+
+```json
+{"success":false,"error":"auth_required"}
+```
+
+## Commands
+
+| Command | Description |
+|--------|-------------|
+| `meetfy auth` | Authenticate with Google Calendar (opens browser) |
+| `meetfy create` | Create an instant meeting (30 min) and reserve time |
+| `meetfy next` | Show your next scheduled meeting |
+| `meetfy logout` | Log out from Google |
+
+### Options (global)
+
+| Option | Description |
+|--------|-------------|
+| `--json` | Output result as JSON (for scripts) |
+
+### Options (`create`)
+
+| Option | Short | Description |
+|--------|--------|-------------|
+| `--title <title>` | `-t` | Meeting title |
+| `--description <description>` | `-d` | Meeting description |
+| `--participants <emails>` | `-p` | Comma-separated participant emails |
+
+
+## Requirements
+
+- Node.js **≥ 22**
 
 ## License
 
-MIT
+ISC
