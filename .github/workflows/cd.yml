@@ -10,9 +10,12 @@ jobs:
   publish-npm:
     runs-on: ubuntu-latest
     environment: npm
+    permissions:
+      id-token: write # Required for npm Trusted Publishing (OIDC)
+      contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.release.tag_name }}
           fetch-depth: 0
@@ -31,8 +34,6 @@ jobs:
 
       - name: Publish to npm
         run: pnpm changeset publish --no-git-tag
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   deploy-cloudflare:
     name: Deploy to Cloudflare Workers
@@ -40,7 +41,7 @@ jobs:
     environment: cloudflare
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.release.tag_name }}
           fetch-depth: 0

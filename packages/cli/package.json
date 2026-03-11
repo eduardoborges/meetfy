@@ -11,6 +11,9 @@
     "dist",
     "README.md"
   ],
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org"
+  },
   "scripts": {
     "start": "tsx src/index.ts",
     "build": "tsx scripts/build.ts",
