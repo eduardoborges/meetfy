@@ -13,9 +13,33 @@ interface StoredTokens {
   [key: string]: unknown;
 }
 
-const HTML_OK = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Meetfy</title></head>
-<body style="font-family:system-ui;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0">
-<h1 style="color:#22c55e">&#10003; Authenticated!</h1><p>You can close this tab.</p></body></html>`;
+const HTML_OK = `
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Meetfy</title>
+    <style>
+      body {
+        font-family: system-ui;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        margin: 0;
+      }
+      h1 {
+        color: #22c55e;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>✅ Authenticated!</h1>
+    <p>You can close this tab.</p>
+  </body>
+</html>
+`;
 
 function makeClient(clientId: string, tokens: Record<string, unknown>): OAuth2Client {
   const client = new google.auth.OAuth2(clientId, '');
@@ -79,6 +103,13 @@ export async function authenticate(): Promise<AuthResult> {
 /** Local server: waits for Worker redirect with tokens, saves to config, returns client. */
 function waitForTokensThenSave(port: number): Promise<OAuth2Client> {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const once = (err: Error | null, client?: OAuth2Client) => {
+      if (settled) return;
+      settled = true;
+      if (err) reject(err);
+      else resolve(client!);
+    };
     const server = http.createServer({ maxHeaderSize: 64 * 1024 }, (req, res) => {
       const url = new URL(req.url ?? '/', `http://localhost:${port}`);
       const raw = url.searchParams.get('tokens');
@@ -94,15 +125,15 @@ function waitForTokensThenSave(port: number): Promise<OAuth2Client> {
         res.writeHead(200, { 'Content-Type': 'text/html', Connection: 'close' }).end(HTML_OK);
         setConfig('googleTokens', tokens);
         setConfig('googleClientId', clientId);
-        resolve(makeClient(clientId, tokens));
+        once(null, makeClient(clientId, tokens));
         server.close();
       } catch {
         res.writeHead(400, { 'Content-Type': 'text/plain', Connection: 'close' }).end('Invalid tokens');
-        reject(new Error('Invalid tokens'));
+        once(new Error('Invalid tokens'));
         server.close();
       }
     });
-    server.on('error', reject);
+    server.on('error', (err) => once(err));
     server.listen(port);
   });
 }
