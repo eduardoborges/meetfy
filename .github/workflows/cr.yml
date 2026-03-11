@@ -26,6 +26,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Cache Turbo
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.cache/turbo
+            .turbo
+          key: ${{ runner.os }}-turbo-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
+
       - name: Create Release Pull Request or Create GitHub Release
         uses: changesets/action@v1
         with:

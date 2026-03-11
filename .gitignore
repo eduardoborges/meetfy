@@ -8,6 +8,9 @@ yarn-error.log*
 dist/
 build/
 
+# turborepo
+.turbo/
+
 # Environment variables
 .env
 .env.local
