@@ -11,13 +11,13 @@ export function welcome(): string {
   ].join('\n');
 }
 
-export function meeting(meeting: Meeting): string {
+export function meeting(meet: Meeting): string {
   const lines = [
-    chalk.cyan.bold(`  ${meeting.title}`),
-    chalk.dim(`  🕐 ${meeting.startTime} – ${meeting.endTime}`),
+    chalk.cyan.bold(`  ${meet.title}`),
+    chalk.dim(`  🕐 ${meet.startTime} – ${meet.endTime}`),
   ];
-  if (meeting.hangoutLink) lines.push(chalk.blue(`  🔗 ${meeting.hangoutLink}`));
-  if (meeting.location) lines.push(chalk.dim(`  📍 ${meeting.location}`));
+  if (meet.hangoutLink) lines.push(chalk.blue(`  🔗 ${meet.hangoutLink}`));
+  if (meet.location) lines.push(chalk.dim(`  📍 ${meet.location}`));
   return lines.join('\n');
 }
 
@@ -45,12 +45,12 @@ export function authSuccess(): string {
   ].join('\n');
 }
 
-export function createSuccess(meeting: Meeting): string {
+export function createSuccess(m: Meeting): string {
   return [
     chalk.green('✅ Meeting created successfully!'),
-    chalk.cyan(`📅 ${meeting.title}`),
-    chalk.blue(`🔗 ${meeting.hangoutLink}`),
-    chalk.dim(`⏰ ${meeting.startTime} – ${meeting.endTime}`),
+    chalk.cyan(`📅 ${m.title}`),
+    chalk.blue(`🔗 ${m.hangoutLink}`),
+    chalk.dim(`⏰ ${m.startTime} – ${m.endTime}`),
   ].join('\n');
 }
 

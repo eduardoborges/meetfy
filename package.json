@@ -2,9 +2,10 @@
   "name": "meetfy-monorepo",
   "private": true,
   "packageManager": "pnpm@10.31.0",
+  "type": "module",
   "scripts": {
     "build": "pnpm -r run build",
-    "lint": "pnpm -r run lint",
+    "lint": "oxlint",
     "dev:cli": "pnpm --filter meetfy run start",
     "dev:worker": "pnpm --filter meetfy-worker run dev",
     "deploy:worker": "pnpm --filter meetfy-worker run deploy",
@@ -14,7 +15,9 @@
     "release": "pnpm run build && changeset publish"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.27.0"
+    "@changesets/cli": "^2.27.0",
+    "oxlint": "1.53.0",
+    "oxfmt": "0.38.0"
   },
   "keywords": [],
   "license": "ISC"

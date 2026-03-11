@@ -1,0 +1,10 @@
+{
+  "name": "@meetfy/oxlint-config",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared Oxlint config for Meetfy monorepo",
+  "files": [
+    "base.config.ts"
+  ]
+}
