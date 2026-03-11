@@ -18,6 +18,7 @@ packages/worker/.dev.vars
 .env.development.local
 .env.test.local
 .env.production.local
+.wrangler
 
 # Google credentials and tokens
 credentials.json
@@ -62,4 +63,4 @@ jspm_packages/
 *.tgz
 
 # Yarn Integrity file
-.yarn-integrity 
+.yarn-integrity

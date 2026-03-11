@@ -32,7 +32,7 @@ app.get('/auth/url', (c) => {
     return c.json({ error: 'Worker missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET' }, 500);
   }
 
-  const origin = new URL(c.req.url).origin;
+  const { origin } = new URL(c.req.url);
   const redirectUri = `${origin}/callback`;
   const state = btoa(JSON.stringify({ forward }));
 
@@ -74,7 +74,7 @@ app.get('/callback', async (c) => {
     return c.text('Worker misconfigured', 500);
   }
 
-  const origin = new URL(c.req.url).origin;
+  const { origin } = new URL(c.req.url);
   const redirectUri = `${origin}/callback`;
 
   const body = new URLSearchParams({
@@ -122,7 +122,7 @@ app.post('/refresh', async (c) => {
     return c.json({ error: 'Worker misconfigured' }, 500);
   }
 
-  const origin = new URL(c.req.url).origin;
+  const { origin } = new URL(c.req.url);
   const redirectUri = `${origin}/callback`;
 
   const form = new URLSearchParams({
