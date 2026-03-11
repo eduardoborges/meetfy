@@ -42,7 +42,7 @@ jobs:
       - name: Create Release Pull Request or Create GitHub Release
         uses: changesets/action@v1
         with:
-          publish: pnpm run build && pnpm changeset publish
+          publish: pnpm run release:ci
           title: "Version Packages"
           commit: "chore: version packages"
           createGithubReleases: true

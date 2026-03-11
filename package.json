@@ -12,7 +12,8 @@
     "deploy:cli": "pnpm --filter meetfy run deploy",
     "changeset": "changeset",
     "version": "changeset version",
-    "release": "pnpm run build && changeset publish"
+    "release": "pnpm run build && changeset publish",
+    "release:ci": "pnpm run build && pnpm changeset publish"
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.0",
