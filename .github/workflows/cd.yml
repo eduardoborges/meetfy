@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version or tag to deploy (e.g. v1.0.0 or main)'
+        description: "Version or tag to deploy (e.g. v1.0.0 or main)"
         required: true
         type: string
 
@@ -21,8 +21,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version || github.event.release.tag_name }}
-          fetch-depth: 0
+          ref: meetfy@${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version || github.event.release.tag_name }}
 
       - name: Install mise
         uses: jdx/mise-action@v3
