@@ -25,6 +25,7 @@ import { copyAndOpenUrl } from './browser';
 function json(obj: object): void {
   console.log(JSON.stringify(obj, null, 0));
 }
+import pk from '../package.json';
 
 export function runCli(): void {
   const program = new Command();
@@ -32,7 +33,7 @@ export function runCli(): void {
   program
     .name('meetfy')
     .description('CLI tool for creating instant meetings and reserving time in Google Calendar')
-    .version('1.0.0')
+    .version(pk.version)
     .option('--json', 'Output result as JSON');
 
   // --- create ---
