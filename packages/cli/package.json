@@ -1,6 +1,6 @@
 {
   "name": "meetfy",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "CLI tool for creating instant meetings and reserving time in Google Calendar",
   "main": "dist/index.js",
   "type": "module",
