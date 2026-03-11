@@ -1,0 +1,13 @@
+name = "meetfy"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+
+# Custom domain (configure zone in Cloudflare Dashboard if needed)
+routes = [{ pattern = "meetfy.eduardoborges.dev", custom_domain = true }]
+
+# Secrets (set via: wrangler secret put GOOGLE_CLIENT_ID, etc.)
+# GOOGLE_CLIENT_ID
+# GOOGLE_CLIENT_SECRET
+[vars]
+# Optional: set in dev with .dev.vars (see .dev.vars.example)
+# WORKER_URL = "http://localhost:8787"  # for local dev redirect_uri

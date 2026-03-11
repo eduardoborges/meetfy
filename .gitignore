@@ -11,6 +11,10 @@ build/
 # Environment variables
 .env
 .env.local
+.dev.vars
+
+# Worker local secrets (packages/worker)
+packages/worker/.dev.vars
 .env.development.local
 .env.test.local
 .env.production.local

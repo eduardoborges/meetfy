@@ -1,0 +1,20 @@
+{
+  "name": "meetfy-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cloudflare Worker - OAuth proxy for Meetfy CLI (holds Google credentials)",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "lint": "eslint src/**/*.ts"
+  },
+  "dependencies": {
+    "hono": "^4.6.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "4.20260310.1",
+    "typescript": "5.9.3",
+    "wrangler": "4.72.0"
+  }
+}
