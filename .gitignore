@@ -25,7 +25,6 @@ credentials.json
 .meetfy-token.json
 
 # IDE files
-.vscode/
 .idea/
 *.swp
 *.swo
