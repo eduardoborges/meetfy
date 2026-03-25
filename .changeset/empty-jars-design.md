@@ -1,0 +1,5 @@
+---
+"meetfy": patch
+---
+
+fix: reestructure
