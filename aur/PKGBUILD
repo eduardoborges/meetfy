@@ -1,11 +1,11 @@
-# Maintainer: YOUR NAME <you@example.com>
+maintainer=('Eduardo Borges <euduardoborges@gmail.com>')
 pkgname=meetfy
 pkgver=1.0.5
 pkgrel=1
 pkgdesc='CLI for creating instant meetings and reserving time in Google Calendar'
 arch=('any')
-url='https://www.npmjs.com/package/meetfy'
-license=('ISC')
+url=('https://www.npmjs.com/package/meetfy')
+license=('MIT')
 depends=('nodejs>=22')
 options=('!strip')
 source=("https://registry.npmjs.org/meetfy/-/meetfy-${pkgver}.tgz")

@@ -1,6 +1,5 @@
 import dayjs from 'dayjs';
-import { google } from 'googleapis';
-import type { calendar_v3 } from 'googleapis';
+import { calendar, calendar_v3 } from '@googleapis/calendar';
 import type { OAuth2Client } from 'google-auth-library';
 import type { Meeting, CreateMeetingInput } from './types';
 
@@ -39,12 +38,12 @@ export async function createMeeting(
   input: CreateMeetingInput,
 ): Promise<Meeting | null> {
   try {
-    const calendar = google.calendar({ version: 'v3', auth: client });
+    const cal = calendar({ version: 'v3', auth: client });
     const startTime = dayjs().add(5, 'minute');
     const endTime = startTime.add(30, 'minute');
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-    const res = await calendar.events.insert({
+    const res = await cal.events.insert({
       calendarId: 'primary',
       requestBody: {
         summary: input.title,
@@ -85,13 +84,13 @@ export async function createMeeting(
 
 export async function getNextMeeting(client: OAuth2Client): Promise<Meeting | null> {
   try {
-    const calendar = google.calendar({ version: 'v3', auth: client });
+    const cal = calendar({ version: 'v3', auth: client });
     const timeMin = dayjs().toISOString();
     const timeMax = dayjs().add(LIST_WINDOW_DAYS, 'day').toISOString();
 
     let ids: string[];
     try {
-      const { data: calList } = await calendar.calendarList.list({
+      const { data: calList } = await cal.calendarList.list({
         minAccessRole: 'reader',
         maxResults: 250,
       });
@@ -105,7 +104,7 @@ export async function getNextMeeting(client: OAuth2Client): Promise<Meeting | nu
 
     const listResults = await Promise.all(
       ids.map((calendarId) =>
-        calendar.events
+        cal.events
           .list({
             calendarId,
             timeMin,

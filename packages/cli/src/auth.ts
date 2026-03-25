@@ -1,6 +1,5 @@
 import http from 'node:http';
-import { google } from 'googleapis';
-import type { OAuth2Client } from 'google-auth-library';
+import { OAuth2Client } from 'google-auth-library';
 import { getConfig, setConfig, clearConfig } from './config';
 
 const WORKER_URL = (process.env.MEETFY_AUTH_URL ?? 'https://meetfy.eduardoborges.dev').replace(/\/$/, '');
@@ -42,7 +41,7 @@ const HTML_OK = `
 `;
 
 function makeClient(clientId: string, tokens: Record<string, unknown>): OAuth2Client {
-  const client = new google.auth.OAuth2(clientId, '');
+  const client = new OAuth2Client(clientId, '');
   client.setCredentials(tokens);
   return client;
 }
