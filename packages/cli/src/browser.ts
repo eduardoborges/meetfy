@@ -1,7 +1,7 @@
 import open from 'open';
-import clipboardy from 'clipboardy';
+import { writeClipboard } from './clipboard.js';
 
 export function copyAndOpenUrl(url: string): void {
-  clipboardy.write(url).catch(() => {});
+  writeClipboard(url).catch(() => {});
   open(url).catch(() => {});
 }

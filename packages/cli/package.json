@@ -2,10 +2,10 @@
   "name": "meetfy",
   "version": "1.0.5",
   "description": "CLI tool for creating instant meetings and reserving time in Google Calendar",
-  "main": "dist/index.js",
+  "main": "dist/index.cjs",
   "type": "module",
   "bin": {
-    "meetfy": "./dist/index.js"
+    "meetfy": "./dist/index.cjs"
   },
   "files": [
     "dist",
@@ -16,7 +16,7 @@
   },
   "scripts": {
     "start": "tsx src/index.ts",
-    "build": "tsx scripts/build.ts",
+    "build": "tsup",
     "prepublishOnly": "pnpm run build",
     "lint": "oxlint",
     "deploy": "npm publish"
@@ -33,18 +33,18 @@
   "license": "ISC",
   "dependencies": {
     "chalk": "5.6.2",
-    "clipboardy": "5.3.1",
     "commander": "14.0.3",
     "conf": "15.1.0",
+    "dayjs": "^1.11.20",
     "google-auth-library": "10.6.1",
     "googleapis": "171.4.0",
-    "open": "11.0.0",
-    "typescript": "5.9.3"
+    "open": "11.0.0"
   },
   "devDependencies": {
     "@types/node": "25.4.0",
-    "esbuild": "0.27.3",
+    "tsup": "8.5.1",
     "oxlint": "^1.20.0",
-    "tsx": "4.21.0"
+    "tsx": "4.21.0",
+    "typescript": "5.9.3"
   }
 }

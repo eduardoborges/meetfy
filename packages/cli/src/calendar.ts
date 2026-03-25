@@ -1,6 +1,38 @@
+import dayjs from 'dayjs';
 import { google } from 'googleapis';
+import type { calendar_v3 } from 'googleapis';
 import type { OAuth2Client } from 'google-auth-library';
 import type { Meeting, CreateMeetingInput } from './types';
+
+/** Upper bound for events.list when using orderBy startTime (exclusive). */
+const LIST_WINDOW_DAYS = 180;
+
+/** Fetched per calendar; must be >1 so we can skip leading all-day events. */
+const LIST_MAX_RESULTS = 50;
+
+function isAllDayEvent(event: calendar_v3.Schema$Event): boolean {
+  return Boolean(event.start?.date && !event.start?.dateTime);
+}
+
+function eventStartMs(event: calendar_v3.Schema$Event): number | null {
+  const start = event.start?.dateTime ?? event.start?.date;
+  if (!start) return null;
+  return new Date(start).getTime();
+}
+
+function meetingFromEvent(event: calendar_v3.Schema$Event): Meeting | null {
+  const start = event.start?.dateTime || event.start?.date;
+  const end = event.end?.dateTime || event.end?.date;
+  if (!start || !end) return null;
+  return {
+    id: event.id ?? '',
+    title: event.summary ?? 'Untitled',
+    startTime: new Date(start).toLocaleString(),
+    endTime: new Date(end).toLocaleString(),
+    hangoutLink: event.hangoutLink ?? undefined,
+    location: event.location ?? undefined,
+  };
+}
 
 export async function createMeeting(
   client: OAuth2Client,
@@ -8,9 +40,8 @@ export async function createMeeting(
 ): Promise<Meeting | null> {
   try {
     const calendar = google.calendar({ version: 'v3', auth: client });
-    const now = new Date();
-    const startTime = new Date(now.getTime() + 5 * 60 * 1000);
-    const endTime = new Date(startTime.getTime() + 30 * 60 * 1000);
+    const startTime = dayjs().add(5, 'minute');
+    const endTime = startTime.add(30, 'minute');
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     const res = await calendar.events.insert({
@@ -23,7 +54,7 @@ export async function createMeeting(
         attendees: input.participants.map((email) => ({ email: email.trim() })),
         conferenceData: {
           createRequest: {
-            requestId: `meetfy-${Date.now()}`,
+            requestId: `meetfy-${dayjs().valueOf()}`,
             conferenceSolutionKey: { type: 'hangoutsMeet' },
           },
         },
@@ -43,8 +74,8 @@ export async function createMeeting(
     return {
       id: res.data.id,
       title: input.title,
-      startTime: startTime.toLocaleString(),
-      endTime: endTime.toLocaleString(),
+      startTime: startTime.toDate().toLocaleString(),
+      endTime: endTime.toDate().toLocaleString(),
       hangoutLink: res.data.hangoutLink,
     };
   } catch {
@@ -55,29 +86,52 @@ export async function createMeeting(
 export async function getNextMeeting(client: OAuth2Client): Promise<Meeting | null> {
   try {
     const calendar = google.calendar({ version: 'v3', auth: client });
-    const now = new Date().toISOString();
-    const res = await calendar.events.list({
-      calendarId: 'primary',
-      timeMin: now,
-      singleEvents: true,
-      orderBy: 'startTime',
-      maxResults: 1,
-    });
+    const timeMin = dayjs().toISOString();
+    const timeMax = dayjs().add(LIST_WINDOW_DAYS, 'day').toISOString();
 
-    const event = res.data.items?.[0];
-    if (!event) return null;
-    const start = event.start?.dateTime || event.start?.date;
-    const end = event.end?.dateTime || event.end?.date;
-    if (!start || !end) return null;
+    let ids: string[];
+    try {
+      const { data: calList } = await calendar.calendarList.list({
+        minAccessRole: 'reader',
+        maxResults: 250,
+      });
+      const calendarIds = (calList.items ?? [])
+        .map((c) => c.id)
+        .filter((id): id is string => Boolean(id));
+      ids = calendarIds.length > 0 ? calendarIds : ['primary'];
+    } catch {
+      ids = ['primary'];
+    }
 
-    return {
-      id: event.id ?? '',
-      title: event.summary ?? 'Untitled',
-      startTime: new Date(start).toLocaleString(),
-      endTime: new Date(end).toLocaleString(),
-      hangoutLink: event.hangoutLink ?? undefined,
-      location: event.location ?? undefined,
-    };
+    const listResults = await Promise.all(
+      ids.map((calendarId) =>
+        calendar.events
+          .list({
+            calendarId,
+            timeMin,
+            timeMax,
+            singleEvents: true,
+            orderBy: 'startTime',
+            maxResults: LIST_MAX_RESULTS,
+          })
+          .catch(() => ({ data: { items: [] as calendar_v3.Schema$Event[] } })),
+      ),
+    );
+
+    let best: calendar_v3.Schema$Event | null = null;
+    let bestMs = Infinity;
+
+    for (const res of listResults) {
+      const event = (res.data.items ?? []).find((e) => !isAllDayEvent(e));
+      if (!event) continue;
+      const ms = eventStartMs(event);
+      if (ms === null || ms >= bestMs) continue;
+      bestMs = ms;
+      best = event;
+    }
+
+    if (!best) return null;
+    return meetingFromEvent(best);
   } catch {
     return null;
   }
