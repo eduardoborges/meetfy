@@ -1,5 +1,11 @@
 # meetfy
 
+## 1.0.7
+
+### Patch Changes
+
+- 208a665: fix: reestructure
+
 ## 1.0.6
 
 ### Patch Changes
