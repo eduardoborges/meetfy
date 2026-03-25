@@ -12,6 +12,22 @@ interface StoredTokens {
   [key: string]: unknown;
 }
 
+/**
+ * Google returns expires_in (seconds from now). Persist as expiry_date (epoch ms) for refresh checks.
+ * Only call this for a payload just received from the token endpoint, not when loading old config from disk
+ * (stale expires_in would lie about remaining lifetime).
+ */
+function storeFreshTokens(tokens: Record<string, unknown>): StoredTokens {
+  const expiresIn = tokens.expires_in;
+  const expiry_date =
+    typeof expiresIn === 'number'
+      ? Date.now() + expiresIn * 1000
+      : typeof tokens.expiry_date === 'number'
+        ? tokens.expiry_date
+        : undefined;
+  return { ...tokens, expiry_date } as StoredTokens;
+}
+
 const HTML_OK = `
 <!DOCTYPE html>
 <html>
@@ -48,20 +64,26 @@ function makeClient(clientId: string, tokens: Record<string, unknown>): OAuth2Cl
 
 /** Returns OAuth client if we have valid tokens; refreshes if expired. */
 export async function getClient(): Promise<OAuth2Client | null> {
-  const stored = getConfig('googleTokens') as StoredTokens | undefined;
+  const storedRaw = getConfig('googleTokens') as Record<string, unknown> | undefined;
   const clientId = getConfig('googleClientId') as string | undefined;
-  if (!stored || !clientId) return null;
+  if (!storedRaw || !clientId) return null;
 
-  let tokens = stored;
-  if (stored.expiry_date && Date.now() > stored.expiry_date && stored.refresh_token) {
+  let tokens = { ...storedRaw } as StoredTokens;
+
+  const skewMs = 60_000;
+  const expired =
+    !tokens.expiry_date || Date.now() > tokens.expiry_date - skewMs;
+
+  if (expired && tokens.refresh_token) {
     try {
       const res = await fetch(`${WORKER_URL}/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: stored.refresh_token }),
+        body: JSON.stringify({ refresh_token: tokens.refresh_token }),
       });
       if (res.ok) {
-        tokens = { ...stored, ...(await res.json()) as StoredTokens };
+        const fresh = (await res.json()) as Record<string, unknown>;
+        tokens = storeFreshTokens({ ...tokens, ...fresh });
         setConfig('googleTokens', tokens);
       }
     } catch {
@@ -118,13 +140,17 @@ function waitForTokensThenSave(port: number): Promise<OAuth2Client> {
       }
       try {
         const json = Buffer.from(raw, 'base64').toString('utf-8');
-        const { client_id: clientId, ...tokens } = JSON.parse(json);
+        const { client_id: clientId, ...tokens } = JSON.parse(json) as {
+          client_id?: string;
+          access_token?: string;
+        } & Record<string, unknown>;
         if (!clientId || !tokens.access_token) throw new Error('Incomplete payload');
 
+        const saved = storeFreshTokens(tokens);
         res.writeHead(200, { 'Content-Type': 'text/html', Connection: 'close' }).end(HTML_OK);
-        setConfig('googleTokens', tokens);
+        setConfig('googleTokens', saved);
         setConfig('googleClientId', clientId);
-        once(null, makeClient(clientId, tokens));
+        once(null, makeClient(clientId, saved));
         server.close();
       } catch {
         res.writeHead(400, { 'Content-Type': 'text/plain', Connection: 'close' }).end('Invalid tokens');
