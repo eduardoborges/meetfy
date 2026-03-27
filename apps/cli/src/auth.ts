@@ -74,22 +74,33 @@ export async function getClient(): Promise<OAuth2Client | null> {
   const expired =
     !tokens.expiry_date || Date.now() > tokens.expiry_date - skewMs;
 
-  if (expired && tokens.refresh_token) {
+  if (expired) {
+    if (!tokens.refresh_token) {
+      return null;
+    }
     try {
       const res = await fetch(`${WORKER_URL}/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh_token: tokens.refresh_token }),
       });
-      if (res.ok) {
-        const fresh = (await res.json()) as Record<string, unknown>;
-        tokens = storeFreshTokens({ ...tokens, ...fresh });
-        setConfig('googleTokens', tokens);
+      if (!res.ok) {
+        return null;
       }
+      const fresh = (await res.json()) as Record<string, unknown>;
+      tokens = storeFreshTokens({ ...tokens, ...fresh });
+      setConfig('googleTokens', tokens);
     } catch {
-      // keep existing
+      return null;
     }
   }
+
+  const stillExpired =
+    !tokens.expiry_date || Date.now() > tokens.expiry_date - skewMs;
+  if (stillExpired) {
+    return null;
+  }
+
   return makeClient(clientId, tokens);
 }
 
