@@ -1,5 +1,11 @@
 # meetfy
 
+## 1.0.9
+
+### Patch Changes
+
+- cf83923: improve OAuth token refresh handling
+
 ## 1.0.8
 
 ### Patch Changes
