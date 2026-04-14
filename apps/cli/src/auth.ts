@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { OAuth2Client } from 'google-auth-library';
 import { getConfig, setConfig, clearConfig } from './config';
+import { logger } from './logger';
 
 const WORKER_URL = (process.env.MEETFY_AUTH_URL ?? 'https://meetfy.eduardoborges.dev').replace(/\/$/, '');
 const REDIRECT_PORT = 3434;
@@ -66,7 +67,13 @@ function makeClient(clientId: string, tokens: Record<string, unknown>): OAuth2Cl
 export async function getClient(): Promise<OAuth2Client | null> {
   const storedRaw = getConfig('googleTokens') as Record<string, unknown> | undefined;
   const clientId = getConfig('googleClientId') as string | undefined;
-  if (!storedRaw || !clientId) return null;
+  if (!storedRaw || !clientId) {
+    logger.warn('getClient: no stored tokens or clientId', {
+      hasTokens: Boolean(storedRaw),
+      hasClientId: Boolean(clientId),
+    });
+    return null;
+  }
 
   let tokens = { ...storedRaw } as StoredTokens;
 
@@ -74,23 +81,45 @@ export async function getClient(): Promise<OAuth2Client | null> {
   const expired =
     !tokens.expiry_date || Date.now() > tokens.expiry_date - skewMs;
 
+  logger.debug('getClient: token check', {
+    expiry_date: tokens.expiry_date,
+    now: Date.now(),
+    expired,
+    hasRefreshToken: Boolean(tokens.refresh_token),
+  });
+
   if (expired) {
     if (!tokens.refresh_token) {
+      logger.error('getClient: token expired and no refresh_token available');
       return null;
     }
     try {
+      logger.info('getClient: refreshing expired token');
       const res = await fetch(`${WORKER_URL}/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh_token: tokens.refresh_token }),
       });
       if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        logger.error('getClient: refresh request failed', {
+          status: res.status,
+          statusText: res.statusText,
+          body: body.slice(0, 500),
+        });
         return null;
       }
       const fresh = (await res.json()) as Record<string, unknown>;
       tokens = storeFreshTokens({ ...tokens, ...fresh });
       setConfig('googleTokens', tokens);
-    } catch {
+      logger.info('getClient: token refreshed successfully', {
+        newExpiryDate: tokens.expiry_date,
+      });
+    } catch (err) {
+      logger.error('getClient: refresh request threw', {
+        error: String(err),
+        message: (err as Error).message,
+      });
       return null;
     }
   }
@@ -98,9 +127,14 @@ export async function getClient(): Promise<OAuth2Client | null> {
   const stillExpired =
     !tokens.expiry_date || Date.now() > tokens.expiry_date - skewMs;
   if (stillExpired) {
+    logger.error('getClient: token still expired after refresh', {
+      expiry_date: tokens.expiry_date,
+      now: Date.now(),
+    });
     return null;
   }
 
+  logger.debug('getClient: returning authenticated client');
   return makeClient(clientId, tokens);
 }
 
@@ -111,23 +145,31 @@ export type AuthResult =
 
 /** Check auth: returns client, or need_code (with authUrl + waitForTokens), or error. */
 export async function authenticate(): Promise<AuthResult> {
+  logger.info('authenticate: starting');
   const client = await getClient();
-  if (client) return { type: 'ok', client };
+  if (client) {
+    logger.info('authenticate: existing client valid');
+    return { type: 'ok', client };
+  }
 
   const forward = `http://localhost:${REDIRECT_PORT}`;
   try {
+    logger.info('authenticate: fetching auth URL from worker');
     const res = await fetch(`${WORKER_URL}/auth/url?forward=${encodeURIComponent(forward)}`);
     if (!res.ok) {
       const err = (await res.json().catch(() => ({}))) as { error?: string };
+      logger.error('authenticate: failed to get auth URL', { status: res.status, error: err.error });
       return { type: 'error', message: err.error ?? 'Failed to get auth URL' };
     }
     const { authUrl } = (await res.json()) as { authUrl: string };
+    logger.info('authenticate: got auth URL, waiting for user');
     return {
       type: 'need_code',
       authUrl,
       waitForTokens: () => waitForTokensThenSave(REDIRECT_PORT),
     };
   } catch (e) {
+    logger.error('authenticate: worker unreachable', { error: (e as Error).message });
     return { type: 'error', message: (e as Error).message ?? 'Auth service unreachable' };
   }
 }

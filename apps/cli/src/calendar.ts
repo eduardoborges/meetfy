@@ -2,6 +2,7 @@ import dayjs from 'dayjs';
 import { calendar, calendar_v3 } from '@googleapis/calendar';
 import type { OAuth2Client } from 'google-auth-library';
 import type { Meeting, CreateMeetingInput } from './types';
+import { logger } from './logger';
 
 /** Upper bound for events.list when using orderBy startTime (exclusive). */
 const LIST_WINDOW_DAYS = 180;
@@ -38,6 +39,7 @@ export async function createMeeting(
   input: CreateMeetingInput,
 ): Promise<Meeting | null> {
   try {
+    logger.info('createMeeting: creating event', { title: input.title });
     const cal = calendar({ version: 'v3', auth: client });
     const startTime = dayjs().add(5, 'minute');
     const endTime = startTime.add(30, 'minute');
@@ -69,7 +71,14 @@ export async function createMeeting(
       sendUpdates: 'all',
     });
 
-    if (!res.data.id || !res.data.hangoutLink) return null;
+    if (!res.data.id || !res.data.hangoutLink) {
+      logger.warn('createMeeting: event created but missing id or hangoutLink', {
+        hasId: Boolean(res.data.id),
+        hasHangoutLink: Boolean(res.data.hangoutLink),
+      });
+      return null;
+    }
+    logger.info('createMeeting: success', { eventId: res.data.id });
     return {
       id: res.data.id,
       title: input.title,
@@ -77,13 +86,18 @@ export async function createMeeting(
       endTime: endTime.toDate().toLocaleString(),
       hangoutLink: res.data.hangoutLink,
     };
-  } catch {
+  } catch (err) {
+    logger.error('createMeeting: failed', {
+      error: String(err),
+      message: (err as Error).message,
+    });
     return null;
   }
 }
 
 export async function getNextMeeting(client: OAuth2Client): Promise<Meeting | null> {
   try {
+    logger.info('getNextMeeting: fetching calendars and events');
     const cal = calendar({ version: 'v3', auth: client });
     const timeMin = dayjs().toISOString();
     const timeMax = dayjs().add(LIST_WINDOW_DAYS, 'day').toISOString();
@@ -98,7 +112,12 @@ export async function getNextMeeting(client: OAuth2Client): Promise<Meeting | nu
         .map((c) => c.id)
         .filter((id): id is string => Boolean(id));
       ids = calendarIds.length > 0 ? calendarIds : ['primary'];
-    } catch {
+      logger.debug('getNextMeeting: found calendars', { count: ids.length });
+    } catch (err) {
+      logger.warn('getNextMeeting: calendarList.list failed, falling back to primary', {
+        error: String(err),
+        message: (err as Error).message,
+      });
       ids = ['primary'];
     }
 
@@ -113,7 +132,14 @@ export async function getNextMeeting(client: OAuth2Client): Promise<Meeting | nu
             orderBy: 'startTime',
             maxResults: LIST_MAX_RESULTS,
           })
-          .catch(() => ({ data: { items: [] as calendar_v3.Schema$Event[] } })),
+          .catch((err) => {
+            logger.warn('getNextMeeting: events.list failed for calendar', {
+              calendarId,
+              error: String(err),
+              message: (err as Error).message,
+            });
+            return { data: { items: [] as calendar_v3.Schema$Event[] } };
+          }),
       ),
     );
 
@@ -129,9 +155,17 @@ export async function getNextMeeting(client: OAuth2Client): Promise<Meeting | nu
       best = event;
     }
 
-    if (!best) return null;
+    if (!best) {
+      logger.info('getNextMeeting: no upcoming meetings found');
+      return null;
+    }
+    logger.info('getNextMeeting: found next meeting', { title: best.summary });
     return meetingFromEvent(best);
-  } catch {
+  } catch (err) {
+    logger.error('getNextMeeting: unexpected error', {
+      error: String(err),
+      message: (err as Error).message,
+    });
     return null;
   }
 }
