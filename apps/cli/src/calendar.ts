@@ -103,6 +103,7 @@ export async function getNextMeeting(client: OAuth2Client): Promise<Meeting | nu
     const timeMax = dayjs().add(LIST_WINDOW_DAYS, 'day').toISOString();
 
     let ids: string[];
+    let calendarListFailed = false;
     try {
       const { data: calList } = await cal.calendarList.list({
         minAccessRole: 'reader',
@@ -119,8 +120,10 @@ export async function getNextMeeting(client: OAuth2Client): Promise<Meeting | nu
         message: (err as Error).message,
       });
       ids = ['primary'];
+      calendarListFailed = true;
     }
 
+    let eventsListsFailed = 0;
     const listResults = await Promise.all(
       ids.map((calendarId) =>
         cal.events
@@ -133,6 +136,7 @@ export async function getNextMeeting(client: OAuth2Client): Promise<Meeting | nu
             maxResults: LIST_MAX_RESULTS,
           })
           .catch((err) => {
+            eventsListsFailed++;
             logger.warn('getNextMeeting: events.list failed for calendar', {
               calendarId,
               error: String(err),
@@ -142,6 +146,12 @@ export async function getNextMeeting(client: OAuth2Client): Promise<Meeting | nu
           }),
       ),
     );
+
+    // Distinguish "no events" from "API down": if calendarList failed AND
+    // every events.list call failed, we have no signal — let the caller retry.
+    if (calendarListFailed && eventsListsFailed === ids.length) {
+      throw new Error('all calendar API calls failed');
+    }
 
     let best: calendar_v3.Schema$Event | null = null;
     let bestMs = Infinity;

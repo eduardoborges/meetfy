@@ -1,10 +1,46 @@
 import http from 'node:http';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { OAuth2Client } from 'google-auth-library';
 import { getConfig, setConfig, clearConfig } from './config';
 import { logger } from './logger';
 
 const WORKER_URL = (process.env.MEETFY_AUTH_URL ?? 'https://meetfy.eduardoborges.dev').replace(/\/$/, '');
 const REDIRECT_PORT = 3434;
+
+const LOCK_PATH = path.join(os.tmpdir(), 'meetfy-token-refresh.lock');
+const LOCK_WAIT_TIMEOUT_MS = 10_000;
+const LOCK_STALE_MS = 30_000;
+const LOCK_POLL_MS = 100;
+
+async function withRefreshLock<T>(fn: () => Promise<T>): Promise<T> {
+  const start = Date.now();
+  while (true) {
+    try {
+      const fd = fs.openSync(LOCK_PATH, 'wx');
+      fs.closeSync(fd);
+      try {
+        return await fn();
+      } finally {
+        try { fs.unlinkSync(LOCK_PATH); } catch { /* best-effort */ }
+      }
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+      try {
+        const stat = fs.statSync(LOCK_PATH);
+        if (Date.now() - stat.mtimeMs > LOCK_STALE_MS) {
+          fs.unlinkSync(LOCK_PATH);
+          continue;
+        }
+      } catch { /* lock vanished between check and stat; retry */ }
+      if (Date.now() - start > LOCK_WAIT_TIMEOUT_MS) {
+        throw new Error('token refresh lock timeout');
+      }
+      await new Promise((r) => setTimeout(r, LOCK_POLL_MS));
+    }
+  }
+}
 
 interface StoredTokens {
   access_token: string;
@@ -94,29 +130,42 @@ export async function getClient(): Promise<OAuth2Client | null> {
       return null;
     }
     try {
-      logger.info('getClient: refreshing expired token');
-      const res = await fetch(`${WORKER_URL}/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: tokens.refresh_token }),
-      });
-      if (!res.ok) {
-        const body = await res.text().catch(() => '');
-        logger.error('getClient: refresh request failed', {
-          status: res.status,
-          statusText: res.statusText,
-          body: body.slice(0, 500),
+      tokens = await withRefreshLock(async () => {
+        const latestRaw = getConfig('googleTokens') as Record<string, unknown> | undefined;
+        const latest = (latestRaw ? { ...latestRaw } : tokens) as StoredTokens;
+        const stillExpired =
+          !latest.expiry_date || Date.now() > latest.expiry_date - skewMs;
+        if (!stillExpired) {
+          logger.info('getClient: token refreshed by another process; reusing', {
+            expiry_date: latest.expiry_date,
+          });
+          return latest;
+        }
+        logger.info('getClient: refreshing expired token');
+        const res = await fetch(`${WORKER_URL}/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: latest.refresh_token }),
         });
-        return null;
-      }
-      const fresh = (await res.json()) as Record<string, unknown>;
-      tokens = storeFreshTokens({ ...tokens, ...fresh });
-      setConfig('googleTokens', tokens);
-      logger.info('getClient: token refreshed successfully', {
-        newExpiryDate: tokens.expiry_date,
+        if (!res.ok) {
+          const body = await res.text().catch(() => '');
+          logger.error('getClient: refresh request failed', {
+            status: res.status,
+            statusText: res.statusText,
+            body: body.slice(0, 500),
+          });
+          throw new Error(`refresh failed: ${res.status}`);
+        }
+        const fresh = (await res.json()) as Record<string, unknown>;
+        const refreshed = storeFreshTokens({ ...latest, ...fresh });
+        setConfig('googleTokens', refreshed);
+        logger.info('getClient: token refreshed successfully', {
+          newExpiryDate: refreshed.expiry_date,
+        });
+        return refreshed;
       });
     } catch (err) {
-      logger.error('getClient: refresh request threw', {
+      logger.error('getClient: refresh failed', {
         error: String(err),
         message: (err as Error).message,
       });

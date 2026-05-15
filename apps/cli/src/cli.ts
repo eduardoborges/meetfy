@@ -143,15 +143,34 @@ export function runCli(): void {
     .description('Show your next scheduled meeting')
     .action(async () => {
       const useJson = program.opts().json as boolean;
-      const client = await getClient();
+      let client = await getClient();
+
+      const fetchWithRetry = async () => {
+        try {
+          return await getNextMeeting(client!);
+        } catch {
+          // Total API failure — reload tokens (may have been refreshed by another
+          // process) and try once more before reporting "no meetings".
+          const fresh = await getClient();
+          if (!fresh) throw new Error('auth_required');
+          client = fresh;
+          return await getNextMeeting(fresh);
+        }
+      };
 
       if (useJson) {
         if (!client) {
           json({ success: false, error: 'auth_required' });
           process.exit(1);
         }
-        const result = await getNextMeeting(client);
-        json({ success: true, meeting: result ?? null });
+        try {
+          const result = await fetchWithRetry();
+          json({ success: true, meeting: result ?? null });
+        } catch (err) {
+          const msg = (err as Error).message;
+          json({ success: false, error: msg === 'auth_required' ? 'auth_required' : 'api_error' });
+          process.exit(1);
+        }
         return;
       }
 
@@ -160,7 +179,13 @@ export function runCli(): void {
         console.error(chalk.red('❌ Not authenticated. Run meetfy auth first.'));
         process.exit(1);
       }
-      const result = await getNextMeeting(client);
+      let result;
+      try {
+        result = await fetchWithRetry();
+      } catch {
+        console.error(chalk.red('❌ Failed to reach Google Calendar.'));
+        process.exit(1);
+      }
       if (!result) {
         console.log(noMeetings());
         return;
