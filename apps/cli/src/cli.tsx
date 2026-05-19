@@ -26,6 +26,7 @@ import { HelloScreen } from './screens/HelloScreen';
 import { LogoutScreen, runLogoutJson } from './screens/LogoutScreen';
 import { NextScreen, runNextJson } from './screens/NextScreen';
 import { CreateScreen, runCreateJson } from './screens/CreateScreen';
+import { AuthScreen, runAuthJson } from './screens/AuthScreen';
 
 function json(obj: object): void {
   console.log(JSON.stringify(obj, null, 0));
@@ -67,42 +68,10 @@ export function runCli(): void {
     .description('Authenticate with Google Calendar')
     .action(async () => {
       const useJson = program.opts().json as boolean;
-      const auth: AuthResult = await authenticate();
-
-      if (useJson) {
-        if (auth.type === 'ok') json({ success: true });
-        else if (auth.type === 'need_code') json({ success: false, authRequired: true, authUrl: auth.authUrl });
-        else json({ success: false, error: auth.message });
-        process.exit(auth.type === 'ok' ? 0 : 1);
+      if (useJson || !process.stdout.isTTY) {
+        process.exit(await runAuthJson());
       }
-
-      console.log(welcome());
-      if (auth.type === 'ok') {
-        console.log(authSuccess());
-        process.exit(0);
-      }
-      if (auth.type === 'error') {
-        console.error(chalk.red('❌'), auth.message);
-        process.exit(1);
-      }
-
-      const tokensPromise = auth.waitForTokens();
-      console.log(authNeedCode(auth.authUrl));
-      console.log(authWaiting());
-
-      const rl = createRl();
-      await new Promise<void>((r) => rl.once('line', r));
-      closeRl(rl);
-      copyAndOpenUrl(auth.authUrl);
-
-      try {
-        await tokensPromise;
-        console.log('\n' + authSuccess());
-      } catch {
-        console.error(chalk.red('\n❌ Failed to get token.'));
-        process.exit(1);
-      }
-      process.exit(0);
+      process.exit(await runScreen(<AuthScreen />));
     });
 
   // --- logout ---
