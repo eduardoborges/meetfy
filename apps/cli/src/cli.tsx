@@ -21,6 +21,8 @@ import {
 } from './format';
 import { createRl, question, closeRl } from './prompts';
 import { copyAndOpenUrl } from './browser';
+import { runScreen } from './runScreen';
+import { HelloScreen } from './screens/HelloScreen';
 
 function json(obj: object): void {
   console.log(JSON.stringify(obj, null, 0));
@@ -192,6 +194,15 @@ export function runCli(): void {
       }
       console.log(nextMeetingTitle());
       console.log(meeting(result));
+    });
+
+  // --- __test-ink (hidden smoke-test command; removed in cleanup commit) ---
+  program
+    .command('__test-ink', { hidden: true })
+    .description('Internal: smoke-test the ink bundle')
+    .action(async () => {
+      const code = await runScreen(<HelloScreen />);
+      process.exit(code);
     });
 
   program.parse();
