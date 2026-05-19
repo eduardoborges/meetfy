@@ -1,36 +1,10 @@
 import { Command } from 'commander';
-import chalk from 'chalk';
-import {
-  authenticate,
-  getClient,
-  logout,
-  type AuthResult,
-} from './auth';
-import { createMeeting, getNextMeeting } from './calendar';
-import {
-  welcome,
-  meeting,
-  authNeedCode,
-  authWaiting,
-  authSuccess,
-  createSuccess,
-  logoutSuccess,
-  noMeetings,
-  nextMeetingTitle,
-  authErrorJson,
-} from './format';
-import { createRl, question, closeRl } from './prompts';
-import { copyAndOpenUrl } from './browser';
+import { getClient } from './auth';
 import { runScreen } from './runScreen';
-import { HelloScreen } from './screens/HelloScreen';
 import { LogoutScreen, runLogoutJson } from './screens/LogoutScreen';
 import { NextScreen, runNextJson } from './screens/NextScreen';
 import { CreateScreen, runCreateJson } from './screens/CreateScreen';
 import { AuthScreen, runAuthJson } from './screens/AuthScreen';
-
-function json(obj: object): void {
-  console.log(JSON.stringify(obj, null, 0));
-}
 import pk from '../package.json';
 
 export function runCli(): void {
@@ -101,15 +75,6 @@ export function runCli(): void {
         process.exit(1);
       }
       process.exit(await runScreen(<NextScreen client={client} />));
-    });
-
-  // --- __test-ink (hidden smoke-test command; removed in cleanup commit) ---
-  program
-    .command('__test-ink', { hidden: true })
-    .description('Internal: smoke-test the ink bundle')
-    .action(async () => {
-      const code = await runScreen(<HelloScreen />);
-      process.exit(code);
     });
 
   program.parse();
