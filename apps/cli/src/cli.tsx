@@ -25,6 +25,7 @@ import { runScreen } from './runScreen';
 import { HelloScreen } from './screens/HelloScreen';
 import { LogoutScreen, runLogoutJson } from './screens/LogoutScreen';
 import { NextScreen, runNextJson } from './screens/NextScreen';
+import { CreateScreen, runCreateJson } from './screens/CreateScreen';
 
 function json(obj: object): void {
   console.log(JSON.stringify(obj, null, 0));
@@ -49,42 +50,15 @@ export function runCli(): void {
     .option('-p, --participants <emails>', 'Comma-separated list of participant emails')
     .action(async (opts: { title?: string; description?: string; participants?: string }) => {
       const useJson = program.opts().json as boolean;
-
-      if (useJson) {
-        const auth = await authenticate();
-        if (auth.type !== 'ok') {
-          json({ success: false, error: authErrorJson(auth) });
-          process.exit(1);
-        }
-        const title = opts.title?.trim() || 'Instant Meeting';
-        const description = opts.description?.trim() || 'Instant meeting created via Meetfy CLI';
-        const participants = (opts.participants ?? '').split(',').map((e) => e.trim()).filter(Boolean);
-        const result = await createMeeting(auth.client, { title, description, participants });
-        if (result) json({ success: true, meeting: result });
-        else json({ success: false, error: 'Failed to create meeting' });
-        process.exit(result ? 0 : 1);
+      if (useJson || !process.stdout.isTTY) {
+        process.exit(await runCreateJson(opts));
       }
-
-      console.log(welcome());
-      const rl = createRl();
-      const title = opts.title?.trim() || (await question(rl, 'Meeting title', 'Instant Meeting'));
-      const description = opts.description?.trim() || (await question(rl, 'Meeting description', 'Instant meeting created via Meetfy CLI'));
-      const participantsStr = opts.participants ?? (await question(rl, 'Participant emails (comma-separated)', ''));
-      closeRl(rl);
-
       const client = await getClient();
       if (!client) {
-        console.error(chalk.red('❌ Not authenticated. Run meetfy auth first.'));
+        process.stderr.write('❌ Not authenticated. Run `meetfy auth` first.\n');
         process.exit(1);
       }
-      const participants = participantsStr.split(',').map((e) => e.trim()).filter(Boolean);
-      console.log(chalk.dim('\n⏳ Creating meeting...'));
-      const result = await createMeeting(client, { title, description, participants });
-      if (result) console.log('\n' + createSuccess(result));
-      else {
-        console.error(chalk.red('\n❌ Failed to create meeting. Run meetfy auth if needed.'));
-        process.exit(1);
-      }
+      process.exit(await runScreen(<CreateScreen client={client} {...opts} />));
     });
 
   // --- auth ---

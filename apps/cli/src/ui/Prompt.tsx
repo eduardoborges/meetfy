@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { Box, Text } from 'ink';
+import TextInput from 'ink-text-input';
 
 interface PromptProps {
   label: string;
@@ -6,10 +8,23 @@ interface PromptProps {
   onSubmit: (value: string) => void;
 }
 
-export function Prompt(_props: PromptProps): JSX.Element {
+export function Prompt({ label, defaultValue = '', onSubmit }: PromptProps): JSX.Element {
+  const [value, setValue] = useState('');
+
   return (
     <Box>
-      <Text dimColor>{'Prompt stub — implemented in Commit 5'}</Text>
+      <Text color="cyan">{'❯ '}</Text>
+      <Text>{label}</Text>
+      {defaultValue ? <Text dimColor>{' ('}{defaultValue}{')'}</Text> : null}
+      <Text>{': '}</Text>
+      <TextInput
+        value={value}
+        onChange={setValue}
+        onSubmit={(submitted) => {
+          const trimmed = submitted.trim();
+          onSubmit(trimmed || defaultValue.trim());
+        }}
+      />
     </Box>
   );
 }
