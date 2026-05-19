@@ -24,6 +24,7 @@ import { copyAndOpenUrl } from './browser';
 import { runScreen } from './runScreen';
 import { HelloScreen } from './screens/HelloScreen';
 import { LogoutScreen, runLogoutJson } from './screens/LogoutScreen';
+import { NextScreen, runNextJson } from './screens/NextScreen';
 
 function json(obj: object): void {
   console.log(JSON.stringify(obj, null, 0));
@@ -148,55 +149,15 @@ export function runCli(): void {
     .description('Show your next scheduled meeting')
     .action(async () => {
       const useJson = program.opts().json as boolean;
-      let client = await getClient();
-
-      const fetchWithRetry = async () => {
-        try {
-          return await getNextMeeting(client!);
-        } catch {
-          // Total API failure — reload tokens (may have been refreshed by another
-          // process) and try once more before reporting "no meetings".
-          const fresh = await getClient();
-          if (!fresh) throw new Error('auth_required');
-          client = fresh;
-          return await getNextMeeting(fresh);
-        }
-      };
-
-      if (useJson) {
-        if (!client) {
-          json({ success: false, error: 'auth_required' });
-          process.exit(1);
-        }
-        try {
-          const result = await fetchWithRetry();
-          json({ success: true, meeting: result ?? null });
-        } catch (err) {
-          const msg = (err as Error).message;
-          json({ success: false, error: msg === 'auth_required' ? 'auth_required' : 'api_error' });
-          process.exit(1);
-        }
-        return;
+      if (useJson || !process.stdout.isTTY) {
+        process.exit(await runNextJson());
       }
-
-      console.log(welcome());
+      const client = await getClient();
       if (!client) {
-        console.error(chalk.red('❌ Not authenticated. Run meetfy auth first.'));
+        process.stderr.write('❌ Not authenticated. Run `meetfy auth` first.\n');
         process.exit(1);
       }
-      let result;
-      try {
-        result = await fetchWithRetry();
-      } catch {
-        console.error(chalk.red('❌ Failed to reach Google Calendar.'));
-        process.exit(1);
-      }
-      if (!result) {
-        console.log(noMeetings());
-        return;
-      }
-      console.log(nextMeetingTitle());
-      console.log(meeting(result));
+      process.exit(await runScreen(<NextScreen client={client} />));
     });
 
   // --- __test-ink (hidden smoke-test command; removed in cleanup commit) ---

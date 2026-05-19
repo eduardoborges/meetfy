@@ -95,82 +95,90 @@ export async function createMeeting(
   }
 }
 
+export async function getUpcomingMeetings(
+  client: OAuth2Client,
+  limit = 10,
+): Promise<Meeting[]> {
+  logger.info('getUpcomingMeetings: fetching calendars and events', { limit });
+  const cal = calendar({ version: 'v3', auth: client });
+  const timeMin = dayjs().toISOString();
+  const timeMax = dayjs().add(LIST_WINDOW_DAYS, 'day').toISOString();
+
+  let ids: string[];
+  let calendarListFailed = false;
+  try {
+    const { data: calList } = await cal.calendarList.list({
+      minAccessRole: 'reader',
+      maxResults: 250,
+    });
+    const calendarIds = (calList.items ?? [])
+      .map((c) => c.id)
+      .filter((id): id is string => Boolean(id));
+    ids = calendarIds.length > 0 ? calendarIds : ['primary'];
+    logger.debug('getUpcomingMeetings: found calendars', { count: ids.length });
+  } catch (err) {
+    logger.warn('getUpcomingMeetings: calendarList.list failed, falling back to primary', {
+      error: String(err),
+      message: (err as Error).message,
+    });
+    ids = ['primary'];
+    calendarListFailed = true;
+  }
+
+  let eventsListsFailed = 0;
+  const listResults = await Promise.all(
+    ids.map((calendarId) =>
+      cal.events
+        .list({
+          calendarId,
+          timeMin,
+          timeMax,
+          singleEvents: true,
+          orderBy: 'startTime',
+          maxResults: LIST_MAX_RESULTS,
+        })
+        .catch((err) => {
+          eventsListsFailed++;
+          logger.warn('getUpcomingMeetings: events.list failed for calendar', {
+            calendarId,
+            error: String(err),
+            message: (err as Error).message,
+          });
+          return { data: { items: [] as calendar_v3.Schema$Event[] } };
+        }),
+    ),
+  );
+
+  // Distinguish "no events" from "API down": if calendarList failed AND
+  // every events.list call failed, surface the error so callers can retry
+  // or fall back. Returning [] here would hide a real outage.
+  if (calendarListFailed && eventsListsFailed === ids.length) {
+    throw new Error('all calendar API calls failed');
+  }
+
+  const events: calendar_v3.Schema$Event[] = [];
+  for (const res of listResults) {
+    for (const event of res.data.items ?? []) {
+      if (!isAllDayEvent(event)) events.push(event);
+    }
+  }
+  events.sort((a, b) => (eventStartMs(a) ?? Infinity) - (eventStartMs(b) ?? Infinity));
+
+  const meetings: Meeting[] = [];
+  for (const event of events) {
+    if (meetings.length >= limit) break;
+    const m = meetingFromEvent(event);
+    if (m) meetings.push(m);
+  }
+
+  logger.info('getUpcomingMeetings: returning', { count: meetings.length });
+  return meetings;
+}
+
 export async function getNextMeeting(client: OAuth2Client): Promise<Meeting | null> {
   try {
-    logger.info('getNextMeeting: fetching calendars and events');
-    const cal = calendar({ version: 'v3', auth: client });
-    const timeMin = dayjs().toISOString();
-    const timeMax = dayjs().add(LIST_WINDOW_DAYS, 'day').toISOString();
-
-    let ids: string[];
-    let calendarListFailed = false;
-    try {
-      const { data: calList } = await cal.calendarList.list({
-        minAccessRole: 'reader',
-        maxResults: 250,
-      });
-      const calendarIds = (calList.items ?? [])
-        .map((c) => c.id)
-        .filter((id): id is string => Boolean(id));
-      ids = calendarIds.length > 0 ? calendarIds : ['primary'];
-      logger.debug('getNextMeeting: found calendars', { count: ids.length });
-    } catch (err) {
-      logger.warn('getNextMeeting: calendarList.list failed, falling back to primary', {
-        error: String(err),
-        message: (err as Error).message,
-      });
-      ids = ['primary'];
-      calendarListFailed = true;
-    }
-
-    let eventsListsFailed = 0;
-    const listResults = await Promise.all(
-      ids.map((calendarId) =>
-        cal.events
-          .list({
-            calendarId,
-            timeMin,
-            timeMax,
-            singleEvents: true,
-            orderBy: 'startTime',
-            maxResults: LIST_MAX_RESULTS,
-          })
-          .catch((err) => {
-            eventsListsFailed++;
-            logger.warn('getNextMeeting: events.list failed for calendar', {
-              calendarId,
-              error: String(err),
-              message: (err as Error).message,
-            });
-            return { data: { items: [] as calendar_v3.Schema$Event[] } };
-          }),
-      ),
-    );
-
-    // Distinguish "no events" from "API down": if calendarList failed AND
-    // every events.list call failed, we have no signal — let the caller retry.
-    if (calendarListFailed && eventsListsFailed === ids.length) {
-      throw new Error('all calendar API calls failed');
-    }
-
-    let best: calendar_v3.Schema$Event | null = null;
-    let bestMs = Infinity;
-
-    for (const res of listResults) {
-      const event = (res.data.items ?? []).find((e) => !isAllDayEvent(e));
-      if (!event) continue;
-      const ms = eventStartMs(event);
-      if (ms === null || ms >= bestMs) continue;
-      bestMs = ms;
-      best = event;
-    }
-
-    if (!best) {
-      logger.info('getNextMeeting: no upcoming meetings found');
-      return null;
-    }
-    logger.info('getNextMeeting: found next meeting', { title: best.summary });
-    return meetingFromEvent(best);
+    const list = await getUpcomingMeetings(client, 1);
+    return list[0] ?? null;
   } catch (err) {
     logger.error('getNextMeeting: unexpected error', {
       error: String(err),

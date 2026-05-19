@@ -1,16 +1,22 @@
-import { Box, Text } from 'ink';
+import { Box } from 'ink';
 import type { Meeting } from '../types';
+import { MeetingCard } from './MeetingCard';
 
 interface MeetingListProps {
   meetings: Meeting[];
   selectedIndex: number;
-  onSelectIndex: (i: number) => void;
 }
 
-export function MeetingList(_props: MeetingListProps): JSX.Element {
+export function MeetingList({ meetings, selectedIndex }: MeetingListProps): JSX.Element {
   return (
-    <Box>
-      <Text dimColor>{'MeetingList stub — implemented in Commit 4'}</Text>
+    <Box flexDirection="column">
+      {meetings.map((m, i) => (
+        <MeetingCard
+          key={m.id || `${m.title}-${i}`}
+          meeting={m}
+          selected={i === selectedIndex}
+        />
+      ))}
     </Box>
   );
 }
