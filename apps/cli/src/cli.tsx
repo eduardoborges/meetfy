@@ -23,6 +23,7 @@ import { createRl, question, closeRl } from './prompts';
 import { copyAndOpenUrl } from './browser';
 import { runScreen } from './runScreen';
 import { HelloScreen } from './screens/HelloScreen';
+import { LogoutScreen, runLogoutJson } from './screens/LogoutScreen';
 
 function json(obj: object): void {
   console.log(JSON.stringify(obj, null, 0));
@@ -134,9 +135,11 @@ export function runCli(): void {
     .command('logout')
     .description('Logout from Google Calendar')
     .action(async () => {
-      logout();
-      if (program.opts().json) json({ success: true });
-      else console.log(logoutSuccess());
+      const useJson = program.opts().json as boolean;
+      if (useJson || !process.stdout.isTTY) {
+        process.exit(runLogoutJson());
+      }
+      process.exit(await runScreen(<LogoutScreen />));
     });
 
   // --- next ---
