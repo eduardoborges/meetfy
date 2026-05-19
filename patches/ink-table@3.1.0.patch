@@ -1,0 +1,127 @@
+diff --git a/dist/index.js b/dist/index.js
+index 0148365e13d0f8309bd87b636a1cdbcea5b867f9..61b25a18e4f5dfae1f4b9dd28b819c065d002ea9 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -1,14 +1,8 @@
+-"use strict";
+-var __importDefault = (this && this.__importDefault) || function (mod) {
+-    return (mod && mod.__esModule) ? mod : { "default": mod };
+-};
+-Object.defineProperty(exports, "__esModule", { value: true });
+-exports.Skeleton = exports.Cell = exports.Header = void 0;
+-const react_1 = __importDefault(require("react"));
+-const ink_1 = require("ink");
+-const object_hash_1 = require("object-hash");
++import React from 'react';
++import { Box, Text } from 'ink';
++import { sha1 } from 'object-hash';
+ /* Table */
+-class Table extends react_1.default.Component {
++class Table extends React.Component {
+     constructor() {
+         /* Config */
+         super(...arguments);
+@@ -148,21 +142,21 @@ class Table extends react_1.default.Component {
+         /**
+          * Render the table line by line.
+          */
+-        return (react_1.default.createElement(ink_1.Box, { flexDirection: "column" },
++        return (React.createElement(Box, { flexDirection: "column" },
+             this.header({ key: 'header', columns, data: {} }),
+             this.heading({ key: 'heading', columns, data: headings }),
+             this.props.data.map((row, index) => {
+                 // Calculate the hash of the row based on its value and position
+-                const key = `row-${(0, object_hash_1.sha1)(row)}-${index}`;
++                const key = `row-${sha1(row)}-${index}`;
+                 // Construct a row.
+-                return (react_1.default.createElement(ink_1.Box, { flexDirection: "column", key: key },
++                return (React.createElement(Box, { flexDirection: "column", key: key },
+                     this.separator({ key: `separator-${key}`, columns, data: {} }),
+                     this.data({ key: `data-${key}`, columns, data: row })));
+             }),
+             this.footer({ key: 'footer', columns, data: {} })));
+     }
+ }
+-exports.default = Table;
++export default Table;
+ /**
+  * Constructs a Row element from the configuration.
+  */
+@@ -170,12 +164,12 @@ function row(config) {
+     /* This is a component builder. We return a function. */
+     const skeleton = config.skeleton;
+     /* Row */
+-    return (props) => (react_1.default.createElement(ink_1.Box, { flexDirection: "row" },
+-        react_1.default.createElement(skeleton.component, null, skeleton.left),
++    return (props) => (React.createElement(Box, { flexDirection: "row" },
++        React.createElement(skeleton.component, null, skeleton.left),
+         ...intersperse((i) => {
+             const key = `${props.key}-hseparator-${i}`;
+             // The horizontal separator.
+-            return (react_1.default.createElement(skeleton.component, { key: key }, skeleton.cross));
++            return (React.createElement(skeleton.component, { key: key }, skeleton.cross));
+         }, 
+         // Values.
+         props.columns.map((column, colI) => {
+@@ -183,7 +177,7 @@ function row(config) {
+             const value = props.data[column.column];
+             if (value == undefined || value == null) {
+                 const key = `${props.key}-empty-${column.key}`;
+-                return (react_1.default.createElement(config.cell, { key: key, column: colI }, skeleton.line.repeat(column.width)));
++                return (React.createElement(config.cell, { key: key, column: colI }, skeleton.line.repeat(column.width)));
+             }
+             else {
+                 const key = `${props.key}-cell-${column.key}`;
+@@ -192,32 +186,29 @@ function row(config) {
+                 const mr = column.width - String(value).length - config.padding;
+                 return (
+                 /* prettier-ignore */
+-                react_1.default.createElement(config.cell, { key: key, column: colI }, `${skeleton.line.repeat(ml)}${String(value)}${skeleton.line.repeat(mr)}`));
++                React.createElement(config.cell, { key: key, column: colI }, `${skeleton.line.repeat(ml)}${String(value)}${skeleton.line.repeat(mr)}`));
+             }
+         })),
+-        react_1.default.createElement(skeleton.component, null, skeleton.right)));
++        React.createElement(skeleton.component, null, skeleton.right)));
+ }
+ /**
+  * Renders the header of a table.
+  */
+-function Header(props) {
+-    return (react_1.default.createElement(ink_1.Text, { bold: true, color: "blue" }, props.children));
++export function Header(props) {
++    return (React.createElement(Text, { bold: true, color: "blue" }, props.children));
+ }
+-exports.Header = Header;
+ /**
+  * Renders a cell in the table.
+  */
+-function Cell(props) {
+-    return react_1.default.createElement(ink_1.Text, null, props.children);
++export function Cell(props) {
++    return React.createElement(Text, null, props.children);
+ }
+-exports.Cell = Cell;
+ /**
+  * Redners the scaffold of the table.
+  */
+-function Skeleton(props) {
+-    return react_1.default.createElement(ink_1.Text, { bold: true }, props.children);
++export function Skeleton(props) {
++    return React.createElement(Text, { bold: true }, props.children);
+ }
+-exports.Skeleton = Skeleton;
+ /* Utility functions */
+ /**
+  * Intersperses a list of elements with another element.
+diff --git a/package.json b/package.json
+index 82df9d99948e8fbbf88d07410692e417d8c5fd7f..397b32229037246499e5240477c7826e792cf3b5 100644
+--- a/package.json
++++ b/package.json
+@@ -2,6 +2,7 @@
+   "name": "ink-table",
+   "version": "3.1.0",
+   "description": "A table component for Ink.",
++  "type": "module",
+   "main": "dist/index.js",
+   "repository": "maticzav/ink-table",
+   "author": "Matic Zavadlal <matic.zavadlal@gmail.com>",

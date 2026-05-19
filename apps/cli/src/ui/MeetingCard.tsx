@@ -15,6 +15,7 @@ export function MeetingCard({ meeting, selected = false }: MeetingCardProps): JS
       <Box flexDirection="column" flexGrow={1}>
         <Text color={titleColor} bold={selected}>{meeting.title}</Text>
         <Text dimColor>{'  '}{meeting.startTime}{' – '}{meeting.endTime}</Text>
+        {meeting.accountEmail ? <Text dimColor>{'  '}{meeting.accountEmail}</Text> : null}
       </Box>
     </Box>
   );
@@ -25,6 +26,7 @@ export function MeetingDetails({ meeting }: { meeting: Meeting }): JSX.Element {
     <Box flexDirection="column" marginTop={1}>
       <Text color="cyan" bold>{meeting.title}</Text>
       <Text dimColor>{'🕐 '}{meeting.startTime}{' – '}{meeting.endTime}</Text>
+      {meeting.accountEmail ? <Text dimColor>{'👤 '}{meeting.accountEmail}</Text> : null}
       {meeting.hangoutLink ? <Text color="blue">{'🔗 '}{meeting.hangoutLink}</Text> : null}
       {meeting.location ? <Text dimColor>{'📍 '}{meeting.location}</Text> : null}
     </Box>

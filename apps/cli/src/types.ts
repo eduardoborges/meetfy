@@ -3,6 +3,9 @@ export interface Meeting {
   title: string;
   startTime: string;
   endTime: string;
+  startMs?: number;
+  endMs?: number;
+  accountEmail?: string;
   hangoutLink?: string;
   location?: string;
 }

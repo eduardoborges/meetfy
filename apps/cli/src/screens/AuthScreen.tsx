@@ -11,7 +11,7 @@ import { copyAndOpenUrl } from '../browser';
 type Phase =
   | { kind: 'fetching' }
   | { kind: 'waiting'; authUrl: string }
-  | { kind: 'success' }
+  | { kind: 'success'; email: string }
   | { kind: 'error'; message: string };
 
 function CommandList(): JSX.Element {
@@ -25,19 +25,24 @@ function CommandList(): JSX.Element {
   );
 }
 
-export function AuthScreen(): JSX.Element {
+interface AuthScreenProps {
+  account?: string;
+}
+
+export function AuthScreen({ account }: AuthScreenProps): JSX.Element {
   const exit = useExit();
   const [phase, setPhase] = useState<Phase>({ kind: 'fetching' });
 
   useEffect(() => {
     let cancelled = false;
-    let waitPromise: Promise<unknown> | null = null;
+    let waitPromise: Promise<{ email: string }> | null = null;
 
-    authenticate().then(
-      (auth: AuthResult) => {
+    const run = async (): Promise<void> => {
+      try {
+        const auth: AuthResult = await authenticate(account, { forceLogin: true });
         if (cancelled) return;
         if (auth.type === 'ok') {
-          setPhase({ kind: 'success' });
+          setPhase({ kind: 'success', email: auth.email });
           return;
         }
         if (auth.type === 'error') {
@@ -46,35 +51,26 @@ export function AuthScreen(): JSX.Element {
         }
         setPhase({ kind: 'waiting', authUrl: auth.authUrl });
         copyAndOpenUrl(auth.authUrl);
-        waitPromise = auth.waitForTokens().then(
-          () => {
-            if (!cancelled) setPhase({ kind: 'success' });
-          },
-          (err: unknown) => {
-            if (!cancelled) {
-              setPhase({
-                kind: 'error',
-                message: err instanceof Error ? err.message : 'Failed to get token',
-              });
-            }
-          },
-        );
-      },
-      (err: unknown) => {
+        waitPromise = auth.waitForTokens();
+        const result = await waitPromise;
+        if (!cancelled) setPhase({ kind: 'success', email: result.email });
+      } catch (err) {
         if (!cancelled) {
           setPhase({
             kind: 'error',
-            message: err instanceof Error ? err.message : 'Authentication failed',
+            message: err instanceof Error ? err.message : 'Failed to get token',
           });
         }
-      },
-    );
+      }
+    };
+
+    void run();
 
     return () => {
       cancelled = true;
       void waitPromise;
     };
-  }, []);
+  }, [account]);
 
   useEffect(() => {
     if (phase.kind === 'success') {
@@ -108,7 +104,7 @@ export function AuthScreen(): JSX.Element {
         </Box>
       ) : null}
       {phase.kind === 'success' ? (
-        <SuccessBox title="Authentication successful!">
+        <SuccessBox title={`Authenticated as ${phase.email}`}>
           <CommandList />
         </SuccessBox>
       ) : null}
@@ -122,10 +118,10 @@ export function AuthScreen(): JSX.Element {
   );
 }
 
-export async function runAuthJson(): Promise<number> {
-  const auth = await authenticate();
+export async function runAuthJson(account?: string): Promise<number> {
+  const auth = await authenticate(account, { forceLogin: true });
   if (auth.type === 'ok') {
-    process.stdout.write(`${JSON.stringify({ success: true })}\n`);
+    process.stdout.write(`${JSON.stringify({ success: true, email: auth.email })}\n`);
     return 0;
   }
   if (auth.type === 'need_code') {

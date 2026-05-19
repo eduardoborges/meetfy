@@ -2,8 +2,18 @@ import http from 'node:http';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { calendar } from '@googleapis/calendar';
 import { OAuth2Client } from 'google-auth-library';
-import { getConfig, setConfig, clearConfig } from './config';
+import {
+  clearAccounts,
+  getAccount,
+  getActiveAccount,
+  listAccounts,
+  removeAccount,
+  setActiveAccount,
+  upsertAccount,
+  type StoredTokens,
+} from './config';
 import { logger } from './logger';
 
 const WORKER_URL = (process.env.MEETFY_AUTH_URL ?? 'https://meetfy.eduardoborges.dev').replace(/\/$/, '');
@@ -35,18 +45,11 @@ async function withRefreshLock<T>(fn: () => Promise<T>): Promise<T> {
         }
       } catch { /* lock vanished between check and stat; retry */ }
       if (Date.now() - start > LOCK_WAIT_TIMEOUT_MS) {
-        throw new Error('token refresh lock timeout');
+        throw new Error('token refresh lock timeout', { cause: err });
       }
       await new Promise((r) => setTimeout(r, LOCK_POLL_MS));
     }
   }
-}
-
-interface StoredTokens {
-  access_token: string;
-  refresh_token?: string;
-  expiry_date?: number;
-  [key: string]: unknown;
 }
 
 /**
@@ -99,25 +102,36 @@ function makeClient(clientId: string, tokens: Record<string, unknown>): OAuth2Cl
   return client;
 }
 
+export async function resolveAccountEmail(client: OAuth2Client): Promise<string> {
+  const cal = calendar({ version: 'v3', auth: client });
+  const { data } = await cal.calendarList.get({ calendarId: 'primary' });
+  if (!data.id) throw new Error('Could not resolve Google account email');
+  return data.id;
+}
+
 /** Returns OAuth client if we have valid tokens; refreshes if expired. */
-export async function getClient(): Promise<OAuth2Client | null> {
-  const storedRaw = getConfig('googleTokens') as Record<string, unknown> | undefined;
-  const clientId = getConfig('googleClientId') as string | undefined;
-  if (!storedRaw || !clientId) {
-    logger.warn('getClient: no stored tokens or clientId', {
-      hasTokens: Boolean(storedRaw),
-      hasClientId: Boolean(clientId),
-    });
+export async function getClient(email?: string): Promise<OAuth2Client | null> {
+  const accountEmail = email ?? getActiveAccount();
+  if (!accountEmail) {
+    logger.warn('getClient: no active account');
     return null;
   }
 
-  let tokens = { ...storedRaw } as StoredTokens;
+  const account = getAccount(accountEmail);
+  if (!account) {
+    logger.warn('getClient: account not found', { email: accountEmail });
+    return null;
+  }
+
+  const clientId = account.clientId;
+  let tokens = { ...account.tokens } as StoredTokens;
 
   const skewMs = 60_000;
   const expired =
     !tokens.expiry_date || Date.now() > tokens.expiry_date - skewMs;
 
   logger.debug('getClient: token check', {
+    email: accountEmail,
     expiry_date: tokens.expiry_date,
     now: Date.now(),
     expired,
@@ -126,22 +140,23 @@ export async function getClient(): Promise<OAuth2Client | null> {
 
   if (expired) {
     if (!tokens.refresh_token) {
-      logger.error('getClient: token expired and no refresh_token available');
+      logger.error('getClient: token expired and no refresh_token available', { email: accountEmail });
       return null;
     }
     try {
       tokens = await withRefreshLock(async () => {
-        const latestRaw = getConfig('googleTokens') as Record<string, unknown> | undefined;
-        const latest = (latestRaw ? { ...latestRaw } : tokens) as StoredTokens;
+        const latestAccount = getAccount(accountEmail);
+        const latest = latestAccount ? { ...latestAccount.tokens } : tokens;
         const stillExpired =
           !latest.expiry_date || Date.now() > latest.expiry_date - skewMs;
         if (!stillExpired) {
           logger.info('getClient: token refreshed by another process; reusing', {
+            email: accountEmail,
             expiry_date: latest.expiry_date,
           });
           return latest;
         }
-        logger.info('getClient: refreshing expired token');
+        logger.info('getClient: refreshing expired token', { email: accountEmail });
         const res = await fetch(`${WORKER_URL}/refresh`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -150,6 +165,7 @@ export async function getClient(): Promise<OAuth2Client | null> {
         if (!res.ok) {
           const body = await res.text().catch(() => '');
           logger.error('getClient: refresh request failed', {
+            email: accountEmail,
             status: res.status,
             statusText: res.statusText,
             body: body.slice(0, 500),
@@ -158,14 +174,16 @@ export async function getClient(): Promise<OAuth2Client | null> {
         }
         const fresh = (await res.json()) as Record<string, unknown>;
         const refreshed = storeFreshTokens({ ...latest, ...fresh });
-        setConfig('googleTokens', refreshed);
+        upsertAccount(accountEmail, { clientId, tokens: refreshed });
         logger.info('getClient: token refreshed successfully', {
+          email: accountEmail,
           newExpiryDate: refreshed.expiry_date,
         });
         return refreshed;
       });
     } catch (err) {
       logger.error('getClient: refresh failed', {
+        email: accountEmail,
         error: String(err),
         message: (err as Error).message,
       });
@@ -177,28 +195,38 @@ export async function getClient(): Promise<OAuth2Client | null> {
     !tokens.expiry_date || Date.now() > tokens.expiry_date - skewMs;
   if (stillExpired) {
     logger.error('getClient: token still expired after refresh', {
+      email: accountEmail,
       expiry_date: tokens.expiry_date,
       now: Date.now(),
     });
     return null;
   }
 
-  logger.debug('getClient: returning authenticated client');
+  logger.debug('getClient: returning authenticated client', { email: accountEmail });
   return makeClient(clientId, tokens);
 }
 
 export type AuthResult =
-  | { type: 'ok'; client: OAuth2Client }
-  | { type: 'need_code'; authUrl: string; waitForTokens: () => Promise<OAuth2Client> }
+  | { type: 'ok'; client: OAuth2Client; email: string }
+  | { type: 'need_code'; authUrl: string; waitForTokens: () => Promise<{ client: OAuth2Client; email: string }> }
   | { type: 'error'; message: string };
 
+interface AuthenticateOptions {
+  forceLogin?: boolean;
+}
+
 /** Check auth: returns client, or need_code (with authUrl + waitForTokens), or error. */
-export async function authenticate(): Promise<AuthResult> {
-  logger.info('authenticate: starting');
-  const client = await getClient();
-  if (client) {
-    logger.info('authenticate: existing client valid');
-    return { type: 'ok', client };
+export async function authenticate(email?: string, options: AuthenticateOptions = {}): Promise<AuthResult> {
+  logger.info('authenticate: starting', { email, forceLogin: options.forceLogin });
+  const resolvedEmail = email ?? getActiveAccount();
+  if (!options.forceLogin) {
+    const client = await getClient(resolvedEmail ?? undefined);
+    if (client) {
+      const activeEmail = resolvedEmail ?? getActiveAccount();
+      if (!activeEmail) return { type: 'error', message: 'No active account' };
+      logger.info('authenticate: existing client valid', { email: activeEmail });
+      return { type: 'ok', client, email: activeEmail };
+    }
   }
 
   const forward = `http://localhost:${REDIRECT_PORT}`;
@@ -224,16 +252,16 @@ export async function authenticate(): Promise<AuthResult> {
 }
 
 /** Local server: waits for Worker redirect with tokens, saves to config, returns client. */
-function waitForTokensThenSave(port: number): Promise<OAuth2Client> {
+function waitForTokensThenSave(port: number): Promise<{ client: OAuth2Client; email: string }> {
   return new Promise((resolve, reject) => {
     let settled = false;
-    const once = (err: Error | null, client?: OAuth2Client) => {
+    const once = (err: Error | null, result?: { client: OAuth2Client; email: string }) => {
       if (settled) return;
       settled = true;
       if (err) reject(err);
-      else resolve(client!);
+      else resolve(result!);
     };
-    const server = http.createServer({ maxHeaderSize: 64 * 1024 }, (req, res) => {
+    const server = http.createServer({ maxHeaderSize: 64 * 1024 }, async (req, res) => {
       const url = new URL(req.url ?? '/', `http://localhost:${port}`);
       const raw = url.searchParams.get('tokens');
       if (!raw) {
@@ -249,10 +277,12 @@ function waitForTokensThenSave(port: number): Promise<OAuth2Client> {
         if (!clientId || !tokens.access_token) throw new Error('Incomplete payload');
 
         const saved = storeFreshTokens(tokens);
+        const client = makeClient(clientId, saved);
+        const email = await resolveAccountEmail(client);
+        upsertAccount(email, { clientId, tokens: saved });
+        setActiveAccount(email);
         res.writeHead(200, { 'Content-Type': 'text/html', Connection: 'close' }).end(HTML_OK);
-        setConfig('googleTokens', saved);
-        setConfig('googleClientId', clientId);
-        once(null, makeClient(clientId, saved));
+        once(null, { client, email });
         server.close();
       } catch {
         res.writeHead(400, { 'Content-Type': 'text/plain', Connection: 'close' }).end('Invalid tokens');
@@ -265,6 +295,21 @@ function waitForTokensThenSave(port: number): Promise<OAuth2Client> {
   });
 }
 
-export function logout(): void {
-  clearConfig();
+export interface LogoutResult {
+  removed: string[];
+  remaining: string[];
+}
+
+export function logout(email?: string, all = false): LogoutResult {
+  if (all) {
+    const removed = listAccounts();
+    clearAccounts();
+    return { removed, remaining: [] };
+  }
+
+  const accountEmail = email ?? getActiveAccount();
+  if (!accountEmail) return { removed: [], remaining: listAccounts() };
+  if (!getAccount(accountEmail)) return { removed: [], remaining: listAccounts() };
+  removeAccount(accountEmail);
+  return { removed: [accountEmail], remaining: listAccounts() };
 }

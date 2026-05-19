@@ -29,6 +29,8 @@ function meetingFromEvent(event: calendar_v3.Schema$Event): Meeting | null {
     title: event.summary ?? 'Untitled',
     startTime: new Date(start).toLocaleString(),
     endTime: new Date(end).toLocaleString(),
+    startMs: new Date(start).getTime(),
+    endMs: new Date(end).getTime(),
     hangoutLink: event.hangoutLink ?? undefined,
     location: event.location ?? undefined,
   };
@@ -84,6 +86,8 @@ export async function createMeeting(
       title: input.title,
       startTime: startTime.toDate().toLocaleString(),
       endTime: endTime.toDate().toLocaleString(),
+      startMs: startTime.valueOf(),
+      endMs: endTime.valueOf(),
       hangoutLink: res.data.hangoutLink,
     };
   } catch (err) {

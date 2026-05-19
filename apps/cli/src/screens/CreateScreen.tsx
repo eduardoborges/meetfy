@@ -232,8 +232,8 @@ export function CreateScreen({ client, ...opts }: CreateScreenProps): JSX.Elemen
   );
 }
 
-export async function runCreateJson(opts: CreateScreenOpts): Promise<number> {
-  const auth: AuthResult = await authenticate();
+export async function runCreateJson(opts: CreateScreenOpts, account?: string): Promise<number> {
+  const auth: AuthResult = await authenticate(account);
   if (auth.type !== 'ok') {
     const error =
       auth.type === 'error' ? auth.message : 'auth_required';

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
 import open from 'open';
-import type { OAuth2Client } from 'google-auth-library';
 import type { Meeting } from '../types';
 import { useExit } from '../runScreen';
 import { Welcome } from '../ui/Welcome';
@@ -11,19 +10,24 @@ import { KeyHint } from '../ui/KeyHint';
 import { MeetingList } from '../ui/MeetingList';
 import { MeetingDetails } from '../ui/MeetingCard';
 import { useAsync } from '../ui/useAsync';
-import { getUpcomingMeetings, getNextMeeting } from '../calendar';
-import { getClient } from '../auth';
+import { getMergedUpcomingMeetings } from '../meetings';
 import { writeClipboard } from '../clipboard';
 
 interface NextScreenProps {
-  client: OAuth2Client;
+  account?: string;
 }
 
-export function NextScreen({ client }: NextScreenProps): JSX.Element {
+export function NextScreen({ account }: NextScreenProps): JSX.Element {
   const exit = useExit();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
-  const state = useAsync<Meeting[]>(() => getUpcomingMeetings(client, 10), [client]);
+  const state = useAsync<Meeting[]>(async () => {
+    const result = await getMergedUpcomingMeetings(account, 10);
+    if (result.accounts.length === 0 || result.failedAccounts.length === result.accounts.length) {
+      throw new Error('auth_required');
+    }
+    return result.meetings;
+  }, [account]);
 
   const meetings = state.data ?? [];
   const selected = meetings[selectedIndex];
@@ -87,7 +91,7 @@ export function NextScreen({ client }: NextScreenProps): JSX.Element {
       {!state.loading && !state.error && meetings.length > 0 ? (
         <Box flexDirection="column">
           <Box marginBottom={1}>
-            <Text dimColor>Upcoming meetings ({meetings.length})</Text>
+            <Text dimColor>Upcoming meetings across accounts ({meetings.length})</Text>
           </Box>
           <MeetingList meetings={meetings} selectedIndex={selectedIndex} />
           {selected ? <MeetingDetails meeting={selected} /> : null}
@@ -110,28 +114,20 @@ export function NextScreen({ client }: NextScreenProps): JSX.Element {
   );
 }
 
-export async function runNextJson(): Promise<number> {
-  let client = await getClient();
-  if (!client) {
+export async function runNextJson(account?: string): Promise<number> {
+  const result = await getMergedUpcomingMeetings(account, 10);
+  if (result.accounts.length === 0 || result.failedAccounts.length === result.accounts.length) {
     process.stdout.write(`${JSON.stringify({ success: false, error: 'auth_required' })}\n`);
     return 1;
   }
-  try {
-    let meeting = await getNextMeeting(client);
-    if (meeting === null) {
-      const fresh = await getClient();
-      if (fresh) {
-        client = fresh;
-        meeting = await getNextMeeting(fresh);
-      }
-    }
-    process.stdout.write(`${JSON.stringify({ success: true, meeting: meeting ?? null })}\n`);
-    return 0;
-  } catch (err) {
-    const msg = (err as Error).message;
-    process.stdout.write(
-      `${JSON.stringify({ success: false, error: msg === 'auth_required' ? 'auth_required' : 'api_error' })}\n`,
-    );
-    return 1;
-  }
+  process.stdout.write(
+    `${JSON.stringify({
+      success: true,
+      meeting: result.meetings[0] ?? null,
+      meetings: result.meetings,
+      accounts: result.accounts,
+      failedAccounts: result.failedAccounts,
+    })}\n`,
+  );
+  return 0;
 }
