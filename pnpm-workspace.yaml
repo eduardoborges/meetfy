@@ -1,5 +1,9 @@
 packages:
   - 'packages/*'
   - 'apps/*'
+allowBuilds:
+  esbuild: true
+  sharp: true
+  workerd: true
 patchedDependencies:
   ink-table@3.1.0: patches/ink-table@3.1.0.patch

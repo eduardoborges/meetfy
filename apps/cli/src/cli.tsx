@@ -15,6 +15,7 @@ import { NextScreen, runNextJson } from './screens/NextScreen';
 import { CreateScreen, runCreateJson } from './screens/CreateScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { AuthScreen, runAuthJson } from './screens/AuthScreen';
+import { runWatch } from './watch';
 import pk from '../package.json';
 
 interface GlobalOptions {
@@ -187,6 +188,14 @@ export async function runCli(): Promise<void> {
         process.exit(await runNextJson(account));
       }
       process.exit(await runScreen(<NextScreen account={account} />));
+    });
+
+  // --- watch ---
+  program
+    .command('watch')
+    .description('Watch upcoming meetings and play a sound 10min and 1min before each one')
+    .action(async () => {
+      await runWatch();
     });
 
   program.parse();

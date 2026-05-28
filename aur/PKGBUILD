@@ -6,12 +6,12 @@ pkgdesc='CLI for creating instant meetings and reserving time in Google Calendar
 arch=('any')
 url=('https://www.npmjs.com/package/meetfy')
 license=('MIT')
-depends=('nodejs>=22')
+depends=('nodejs>=20')
 options=('!strip')
 source=("https://registry.npmjs.org/meetfy/-/meetfy-${pkgver}.tgz")
 # Run updpkgsums after each release (or: curl -sL ... | sha256sum)
 sha256sums=('e64313da8241eca8fb81cce1093a0e977822f0e6eddd189a17244f91d275dfda')
 
 package() {
-  install -Dm755 "${srcdir}/package/dist/index.cjs" "${pkgdir}/usr/bin/meetfy"
+  install -Dm755 "${srcdir}/package/dist/index.js" "${pkgdir}/usr/bin/meetfy"
 }

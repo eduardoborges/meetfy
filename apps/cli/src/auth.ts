@@ -23,6 +23,7 @@ const LOCK_PATH = path.join(os.tmpdir(), 'meetfy-token-refresh.lock');
 const LOCK_WAIT_TIMEOUT_MS = 10_000;
 const LOCK_STALE_MS = 30_000;
 const LOCK_POLL_MS = 100;
+const TOKEN_REFRESH_SKEW_MS = 5 * 60_000;
 
 async function withRefreshLock<T>(fn: () => Promise<T>): Promise<T> {
   const start = Date.now();
@@ -126,9 +127,8 @@ export async function getClient(email?: string): Promise<OAuth2Client | null> {
   const clientId = account.clientId;
   let tokens = { ...account.tokens } as StoredTokens;
 
-  const skewMs = 60_000;
   const expired =
-    !tokens.expiry_date || Date.now() > tokens.expiry_date - skewMs;
+    !tokens.expiry_date || Date.now() > tokens.expiry_date - TOKEN_REFRESH_SKEW_MS;
 
   logger.debug('getClient: token check', {
     email: accountEmail,
@@ -148,7 +148,7 @@ export async function getClient(email?: string): Promise<OAuth2Client | null> {
         const latestAccount = getAccount(accountEmail);
         const latest = latestAccount ? { ...latestAccount.tokens } : tokens;
         const stillExpired =
-          !latest.expiry_date || Date.now() > latest.expiry_date - skewMs;
+          !latest.expiry_date || Date.now() > latest.expiry_date - TOKEN_REFRESH_SKEW_MS;
         if (!stillExpired) {
           logger.info('getClient: token refreshed by another process; reusing', {
             email: accountEmail,
@@ -192,7 +192,7 @@ export async function getClient(email?: string): Promise<OAuth2Client | null> {
   }
 
   const stillExpired =
-    !tokens.expiry_date || Date.now() > tokens.expiry_date - skewMs;
+    !tokens.expiry_date || Date.now() > tokens.expiry_date - TOKEN_REFRESH_SKEW_MS;
   if (stillExpired) {
     logger.error('getClient: token still expired after refresh', {
       email: accountEmail,

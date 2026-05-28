@@ -47,7 +47,8 @@
     "oxlint": "^1.20.0",
     "tsup": "8.5.1",
     "tsx": "4.21.0",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "esbuild": "0.28.0"
   },
   "dependencies": {
     "@mishieck/ink-titled-box": "^0.4.2",
