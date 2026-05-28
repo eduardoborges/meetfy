@@ -1,5 +1,27 @@
 # meetfy
 
+## 1.2.0
+
+### Minor Changes
+
+- 3ebbfca: feat(cli): add `meetfy watch` command
+
+  New long-running command that polls upcoming meetings across all configured accounts and fires desktop alerts 10 minutes and 1 minute before each one starts. Uses `paplay` for sound (falls back through a list of freedesktop sound files) and `notify-send` for the visual notification, so it targets Linux desktops. Each `(meeting, threshold)` pair only fires once per process to avoid duplicate alerts.
+
+### Patch Changes
+
+- 3ebbfca: fix(aur): point PKGBUILD `install` at `dist/index.js`
+
+  The PKGBUILD was installing `dist/index.cjs`, but the tsup bundle only emits ESM (`dist/index.js`), matching the `bin` entry in `package.json`. The CJS path didn't exist, so the AUR package shipped a broken `/usr/bin/meetfy` binary. Also bumps the `nodejs` runtime dependency to `>=20` to stay in line with currently supported Node versions.
+
+- 3ebbfca: fix(cli): widen OAuth token refresh skew to 5 minutes
+
+  The token refresh check used a 60-second skew, which left a very narrow window for proactive refresh and occasionally allowed near-expired tokens through to the Google APIs. Bumped to 5 minutes and lifted the value into a `TOKEN_REFRESH_SKEW_MS` constant so all three expiry checks in `getClient` stay in sync.
+
+- 3ebbfca: chore(cli): lower tsup build target to `node20`
+
+  Aligns the bundle target with the runtime floor the AUR PKGBUILD declares (`nodejs>=20`) so users on Node 20 LTS aren't shipped syntax that requires a newer runtime. Also pins `esbuild@0.28.0` as an explicit devDependency to keep the tsup toolchain reproducible.
+
 ## 1.1.0
 
 ### Minor Changes
